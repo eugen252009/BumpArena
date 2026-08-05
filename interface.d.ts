@@ -29,3 +29,21 @@ export interface IStorageStrategy {
 	): void;
 	records(): [Uint8Array, ArenaLocation] | undefined;
 }
+
+export type FieldType = "uint8" | "int8" | "uint16" | "int16" | "uint32" | "int32" | "float32" | "float64" | "bigint64" | "biguint64";
+
+export interface FieldDescriptor {
+	type: FieldType;
+	offset: number;
+}
+
+export interface Schema {
+	[key: string]: FieldDescriptor;
+}
+
+export interface IShadowView {
+	_setTarget(offset: number): void;
+	_view: DataView;
+	_baseOffset: number;
+}
+

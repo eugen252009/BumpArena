@@ -71,7 +71,8 @@ function processNumber(buf: Uint8Array) {
 		bigstorageidx = 0
 	}
 
-	for (const item of arena) {
+	const populated = arena.subarray(0, arenaidx);
+	for (const item of populated) {
 		totalSum += BigInt(item)
 	}
 	ingest = performance.now()
@@ -82,9 +83,10 @@ function processNumber(buf: Uint8Array) {
 	storage = newFile.buffer
 	arena = new Float64Array(storage)
 	const recover = performance.now()
-	for (const _ of arena) { }
+	const populatedRecovered = arena.subarray(0, totalRecords);
+	for (const _ of populatedRecovered) { }
 	const recover2 = performance.now()
-	for (const item of arena) { newTotalSum += BigInt(item) }
+	for (const item of populatedRecovered) { newTotalSum += BigInt(item) }
 	end = performance.now()
 
 	console.log(`Total Time: ${(end - start).toFixed(3)} ms`)

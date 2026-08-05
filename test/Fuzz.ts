@@ -4,40 +4,43 @@ const iterations = isCI ? 5_000 : 10_0000;
 
 export function FuzzAlloc() {
 	const arena = new Arena({ initialSize: 1024 * 1024 * 10 });
-	const activePointers = new Map<number, { ptr: any, data: Uint8Array }>();
-	let nextId = 0;
+	const activePointers: { ptr: any, data: Uint8Array }[] = [];
 
 	for (let i = 0; i < iterations; i++) {
 		const action = Math.random();
 
-		if (action > 0.3 || activePointers.size === 0) {
+		if (action > 0.3 || activePointers.length === 0) {
 			const size = Math.floor(Math.random() * 100) + 1;
 			const mockData = new Uint8Array(size).fill(i % 255);
 			const ptr = arena.alloc(mockData, 0, mockData.length);
 
-			activePointers.set(nextId++, { ptr, data: mockData });
+			activePointers.push({ ptr, data: mockData });
 		} else {
-			const ids = Array.from(activePointers.keys());
-			const randomId = ids[Math.floor(Math.random() * ids.length)];
-			const { ptr } = activePointers.get(randomId!)!;
+			const randomIdx = Math.floor(Math.random() * activePointers.length);
+			const { ptr } = activePointers[randomIdx]!;
 
 			arena.free(ptr);
-			activePointers.delete(randomId!);
+			
+			// O(1) swap-and-pop
+			const last = activePointers.pop()!;
+			if (randomIdx < activePointers.length) {
+				activePointers[randomIdx] = last;
+			}
 		}
 	}
 
-	console.log(`Fuzzing ended. active Records: ${activePointers.size}`);
+	console.log(`Fuzzing ended. active Records: ${activePointers.length}`);
 
-	for (const [_id, { ptr, data }] of activePointers) {
+	for (const { ptr, data } of activePointers) {
 		const storedData = arena.read(ptr)!;
 		if (Buffer.from(storedData).compare(data) !== 0) throw new Error("data isn't matching!");
 	}
 	console.log(`Checking integrity of the Data ended.`);
 
 	let foundCount = 0;
-	foundCount = 0
 	arena.collectActiveRecords("Uint8Array", () => { foundCount++ });
 
-	if (foundCount !== activePointers.size) return false
+	if (foundCount !== activePointers.length) return false
 	return true
 };
+

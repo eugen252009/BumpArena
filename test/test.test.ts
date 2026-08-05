@@ -5,6 +5,7 @@ import { TestCheckReserve } from "./reserve.ts"
 import { TestDirectAlloc } from "./directAccess.ts"
 import { TestIteratorAccess } from "./iterator.ts"
 import { FuzzAlloc } from "./Fuzz.ts"
+import { TestShadowAccess } from "./shadow.ts"
 import { nearoverflow, nearoverflow2, nearoverflow3, nearoverflow4 } from "./overflow.ts"
 
 describe("Arena Checks", () => {
@@ -19,4 +20,6 @@ describe("Arena Checks", () => {
 	test("Testing intger overflow", () => equal(nearoverflow3(), true, "Integer Overflow in reading/writing detected"))
 	test("Testing intger overflow", () => equal(nearoverflow4(), true, "Integer Overflow in reading/writing detected"))
 	test("Arena Fuzz-Test: Random Alloc/Free & Integrity", () => equal(FuzzAlloc(), true, "Arena Fuzz-Test: Random Alloc/Free & Integrity"))
+	test("Shadow Object Access", () => equal(TestShadowAccess(), true, "Shadow Object Access failed!"))
 })
+

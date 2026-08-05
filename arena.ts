@@ -1,4 +1,4 @@
-import { type ArenaLocation, type ArenaOptions, type InspectStruct } from "./interface.d.js"
+import { type ArenaLocation, type ArenaOptions, type InspectStruct, type FieldType, type Schema, type IShadowView } from "./interface.d.js"
 
 export const  enum HEADERS {
 	TOTAL_LENGTH_0_32 = 0,
@@ -127,10 +127,8 @@ export class Arena {
 		const { offset: start, generation } = this._smallInspect(location);
 		const idx = this._idx32(start)
 		const currgen = BigInt(this._view32[idx + HEADERS.GENERATION_BYTE_0_32]!)
-		const status = this._view8[idx + HEADERS.STATUS_8]!
 
 		if (generation !== currgen) return null
-		if ((status & 0x0000) !== 0) return null
 		if (this._view8[start + HEADERS.STATUS_8] != 0) return null
 
 		const dataLength = this._view32[idx + HEADERS.PAYLOAD_LENGTH_0_32]!;
@@ -303,18 +301,23 @@ export class Arena {
 		return ((Math.ceil(size + this.HEADER_SIZE_BYTES) / step) * step) * amnt;
 	}
 
-	public allocNoPtr(source: ArrayBufferView, offset: number = 0, length: number = source.byteLength) {
+	public allocNoPtr(source: ArrayBufferView, offset: number = 0, length: number = source.byteLength - offset) {
 		const step = this._alignMask + 1;
-		const rawNeeded = length + this.HEADER_SIZE_BYTES;
+		const len = length;
+		const rawNeeded = len + this.HEADER_SIZE_BYTES;
 		const alignedBlockSize = Math.ceil(rawNeeded / step) * step;
 		const bucketIdx = (alignedBlockSize >> this._alignShift) - 1;
-		const blob = new Uint8Array(source.buffer, offset, length)
+		const blob = new Uint8Array(
+			source.buffer,
+			source.byteOffset + offset,
+			len
+		)
 		if (bucketIdx >= 0 && bucketIdx < this._bucketcount) {
 			const count = this._getBucketCount(bucketIdx);
 			if (count > 0) {
 				const recycledOffset = this._getBucketOffset(bucketIdx, count - 1);
 				this._setBucketCount(bucketIdx, count - 1);
-				this._initBlock(recycledOffset, length);
+				this._initBlock(recycledOffset, len);
 
 				this._view8.set(blob, recycledOffset + this.HEADER_SIZE_BYTES);
 
@@ -328,21 +331,21 @@ export class Arena {
 		const start = this._offset;
 		const nextOffset = start + alignedBlockSize;
 
-		this._initBlock(start, length);
+		this._initBlock(start, len);
 		this._view8.set(blob, start + this.HEADER_SIZE_BYTES);
 		this._view8[start + HEADERS.STATUS_8] = BlockStatus.Ready;
 		this._offset = nextOffset;
 	}
-	public alloc(source: ArrayBufferView, startn: number = 0, length: number = source.byteLength): ArenaLocation {
+	public alloc(source: ArrayBufferView, startn: number = 0, length: number = source.byteLength - startn): ArenaLocation {
 		const step = this._alignMask + 1;
-		const len = length - startn;
+		const len = length;
 		const rawNeeded = len + this.HEADER_SIZE_BYTES;
 		const alignedBlockSize = Math.ceil(rawNeeded / step) * step;
 		const bucketIdx = (alignedBlockSize >> this._alignShift) - 1;
 		const blob = new Uint8Array(
 			source.buffer,
 			source.byteOffset + startn,
-			length - startn
+			len
 		)
 		if (bucketIdx >= 0 && bucketIdx < this._bucketcount) {
 			const count = this._getBucketCount(bucketIdx);
@@ -400,3 +403,85 @@ export class Arena {
 		this._next = 0
 	}
 }
+
+export function createShadowClass<T>(schema: Schema) {
+	const proto = Object.create(null);
+
+	for (const [key, field] of Object.entries(schema)) {
+		const { type, offset } = field;
+
+		let getter: () => any;
+		let setter: (val: any) => void;
+
+		switch (type) {
+			case "uint8":
+				getter = function(this: any) { return this._view.getUint8(this._baseOffset + offset); };
+				setter = function(this: any, val: number) { this._view.setUint8(this._baseOffset + offset, val); };
+				break;
+			case "int8":
+				getter = function(this: any) { return this._view.getInt8(this._baseOffset + offset); };
+				setter = function(this: any, val: number) { this._view.setInt8(this._baseOffset + offset, val); };
+				break;
+			case "uint16":
+				getter = function(this: any) { return this._view.getUint16(this._baseOffset + offset, true); };
+				setter = function(this: any, val: number) { this._view.setUint16(this._baseOffset + offset, val, true); };
+				break;
+			case "int16":
+				getter = function(this: any) { return this._view.getInt16(this._baseOffset + offset, true); };
+				setter = function(this: any, val: number) { this._view.setInt16(this._baseOffset + offset, val, true); };
+				break;
+			case "uint32":
+				getter = function(this: any) { return this._view.getUint32(this._baseOffset + offset, true); };
+				setter = function(this: any, val: number) { this._view.setUint32(this._baseOffset + offset, val, true); };
+				break;
+			case "int32":
+				getter = function(this: any) { return this._view.getInt32(this._baseOffset + offset, true); };
+				setter = function(this: any, val: number) { this._view.setInt32(this._baseOffset + offset, val, true); };
+				break;
+			case "float32":
+				getter = function(this: any) { return this._view.getFloat32(this._baseOffset + offset, true); };
+				setter = function(this: any, val: number) { this._view.setFloat32(this._baseOffset + offset, val, true); };
+				break;
+			case "float64":
+				getter = function(this: any) { return this._view.getFloat64(this._baseOffset + offset, true); };
+				setter = function(this: any, val: number) { this._view.setFloat64(this._baseOffset + offset, val, true); };
+				break;
+			case "bigint64":
+				getter = function(this: any) { return this._view.getBigInt64(this._baseOffset + offset, true); };
+				setter = function(this: any, val: bigint) { this._view.setBigInt64(this._baseOffset + offset, val, true); };
+				break;
+			case "biguint64":
+				getter = function(this: any) { return this._view.getBigUint64(this._baseOffset + offset, true); };
+				setter = function(this: any, val: bigint) { this._view.setBigUint64(this._baseOffset + offset, val, true); };
+				break;
+			default:
+				throw new Error(`Unsupported field type: ${type}`);
+		}
+
+		Object.defineProperty(proto, key, {
+			get: getter,
+			set: setter,
+			enumerable: true,
+			configurable: false
+		});
+	}
+
+	class ShadowWrapper implements IShadowView {
+		public _view: DataView;
+		public _baseOffset: number = 0;
+
+		constructor(buffer: ArrayBufferLike) {
+			this._view = new DataView(buffer);
+		}
+
+		public _setTarget(offset: number) {
+			this._baseOffset = offset;
+		}
+	}
+
+	Object.setPrototypeOf(ShadowWrapper.prototype, proto);
+	return ShadowWrapper as any as {
+		new (buffer: ArrayBufferLike): T & IShadowView;
+	};
+}
+

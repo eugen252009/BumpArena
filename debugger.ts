@@ -38,8 +38,7 @@ for (const item of a.records()) {
 		if (j === 0x08) { stdout.write(`${colors.yellow}${payload.subarray(0x08, 0x0C).toHex()}${colors.reset}`); j = 0x0C; continue }	// generation
 		if (j === 0x0C) { stdout.write(`${colors.blue}${payload.subarray(0x0C, 0x0D).toHex()}${colors.reset}`); j = 0x0D; continue }	// Status
 		if (j === 0x0D) { stdout.write(`${colors.cyan}${payload.subarray(0x0D, 0x0F).toHex()}${colors.reset}`); j = 0x10; continue }	// Magic + Version
-		if (j === 0x10) { stdout.write(`${colors.purple}${payload.subarray(0x10, 0x20).toHex()}${colors.reset}\n`); break } 					// Payload
-		if (j === 0x10) { stdout.write(`${colors.purple}${payload.subarray(0x10, data.totalLength - data.payloadLength).toHex()}${colors.reset}\n`); break } 					// Payload
+		if (j === 0x10) { stdout.write(`${colors.purple}${payload.subarray(0x10, 0x10 + data.payloadLength).toHex()}${colors.reset}\n`); break } 					// Payload
 	}
 }
 
